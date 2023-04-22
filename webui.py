@@ -1,9 +1,16 @@
 import gradio as gr
+import sys
 import os
 import shutil
+import asyncio
+from argparse import Namespace
+from models.loader.args import parser
+from models.loader import LoaderLLM
 from chains.local_doc_qa import LocalDocQA
 from configs.model_config import *
 import nltk
+import models.shared as shared
+from langchain.llms.base import LLM
 
 nltk.data.path = [os.path.join(os.path.dirname(__file__), "nltk_data")] + nltk.data.path
 
@@ -51,9 +58,9 @@ def update_status(history, status):
     return history
 
 
-def init_model():
+def init_model(llm_model: LLM = None):
     try:
-        local_doc_qa.init_cfg()
+        local_doc_qa.init_cfg(llm_model=llm_model)
         local_doc_qa.llm._call("你好")
         return """模型已成功加载，可以开始对话，或从右侧选择模式后开始对话"""
     except Exception as e:
@@ -61,12 +68,19 @@ def init_model():
         return """模型未成功加载，请到页面左上角"模型配置"选项卡中重新选择后点击"加载模型"按钮"""
 
 
-def reinit_model(llm_model, embedding_model, llm_history_len, use_ptuning_v2, top_k, history):
+def reinit_model(llm_model, embedding_model, llm_history_len, no_remote_model, use_ptuning_v2, top_k, history):
     try:
-        local_doc_qa.init_cfg(llm_model=llm_model,
+
+        llm_model_info = llm_model_dict[llm_model]
+
+        shared.loaderLLM.model_name = llm_model_info['path']
+        shared.loaderLLM.no_remote_model = no_remote_model
+        shared.loaderLLM.use_ptuning_v2 = use_ptuning_v2
+        shared.loaderLLM.reload_model()
+        llm_model_ins = llm_model_info['provides'](shared.loaderLLM)
+
+        local_doc_qa.init_cfg(llm_model=llm_model_ins,
                               embedding_model=embedding_model,
-                              llm_history_len=llm_history_len,
-                              use_ptuning_v2=use_ptuning_v2,
                               top_k=top_k)
         model_status = """模型已成功重新加载，可以开始对话，或从右侧选择模式后开始对话"""
     except Exception as e:
@@ -144,7 +158,16 @@ init_message = """欢迎使用 langchain-ChatGLM Web UI！
 知识库暂不支持文件删除，该功能将在后续版本中推出。
 """
 
-model_status = init_model()
+# 初始化消息
+args = None
+args = parser.parse_args()
+
+args_dict = vars(args)
+shared.loaderLLM = LoaderLLM(args_dict)
+chatGLMLLM = ChatGLM(shared.loaderLLM)
+chatGLMLLM.history_len = LLM_HISTORY_LEN
+
+model_status = init_model(llm_model=chatGLMLLM)
 
 with gr.Blocks(css=block_css) as demo:
     vs_path, file_status, model_status, vs_list = gr.State(""), gr.State(""), gr.State(model_status), gr.State(vs_list)
@@ -222,6 +245,10 @@ with gr.Blocks(css=block_css) as demo:
                              label="LLM 模型",
                              value=LLM_MODEL,
                              interactive=True)
+
+        no_remote_model = gr.Checkbox(shared.loaderLLM.no_remote_model,
+                                      label="加载本地模型",
+                                      interactive=True)
         llm_history_len = gr.Slider(0,
                                     10,
                                     value=LLM_HISTORY_LEN,
@@ -244,13 +271,14 @@ with gr.Blocks(css=block_css) as demo:
         load_model_button = gr.Button("重新加载模型")
     load_model_button.click(reinit_model,
                             show_progress=True,
-                            inputs=[llm_model, embedding_model, llm_history_len, use_ptuning_v2, top_k, chatbot],
+                            inputs=[llm_model, embedding_model, llm_history_len, no_remote_model,  use_ptuning_v2, top_k, chatbot],
                             outputs=chatbot
                             )
 
-demo.queue(concurrency_count=3
-           ).launch(server_name='0.0.0.0',
-                    server_port=7860,
-                    show_api=False,
-                    share=False,
-                    inbrowser=False)
+demo.queue(concurrency_count=3)
+demo.launch(server_name='0.0.0.0',
+            server_port=7860,
+            show_api=False,
+            share=False,
+            inbrowser=False)
+demo.close()

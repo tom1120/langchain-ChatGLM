@@ -4,13 +4,7 @@ import torch
 import transformers
 from typing import Optional, List
 from models.loader import LoaderLLM
-from models.extensions.callback import (Iteratorize, Stream,
-                                        _SentinelTokenStoppingCriteria)
-
-
-def get_max_prompt_length(state):
-    max_length = state['truncation_length'] - state['max_new_tokens']
-    return max_length
+from models.extensions.callback import (Iteratorize, Stream)
 
 
 class LLamaLLM(LLM):
@@ -59,7 +53,7 @@ class LLamaLLM(LLM):
 
     def encode(self, prompt, add_special_tokens=True, add_bos_token=True, truncation_length=None):
         input_ids = self.llm.tokenizer.encode(str(prompt), return_tensors='pt',
-                                                    add_special_tokens=add_special_tokens)
+                                              add_special_tokens=add_special_tokens)
         # This is a hack for making replies more creative.
         if not add_bos_token and input_ids[0][0] == self.llm.tokenizer.bos_token_id:
             input_ids = input_ids[:, 1:]
@@ -80,6 +74,10 @@ class LLamaLLM(LLM):
         reply = reply.replace(r'<|endoftext|>', '')
         return reply
 
+    def get_max_prompt_length(self):
+        max_length = self.state['truncation_length'] - self.state['max_new_tokens']
+        return max_length
+
     def generate_with_callback(self, callback=None, **kwargs):
         kwargs['stopping_criteria'].append(Stream(callback_func=callback))
         self.llm.clear_torch_cache()
@@ -89,12 +87,10 @@ class LLamaLLM(LLM):
     def generate_with_streaming(self, callback=None, **kwargs):
         return Iteratorize(self.generate_with_callback, kwargs, callback)
 
-    def _call(self,
-              prompt: str,
-              stop: Optional[List[str]] = None) -> str:
+    def callmessage(self, prompt: str, ):
 
         input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
-                                truncation_length=get_max_prompt_length(self.state))
+                                truncation_length=self.get_max_prompt_length())
         self.generate_params.update({'inputs': input_ids})
 
         with self.generate_with_streaming(**self.generate_params) as generator:
@@ -102,3 +98,18 @@ class LLamaLLM(LLM):
                 new_tokens = len(output) - len(input_ids[0])
                 reply = self.decode(output[-new_tokens:])
                 print(reply)
+
+    def _call(self,
+              prompt: str,
+              stop: Optional[List[str]] = None) -> str:
+        input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
+                                truncation_length=self.get_max_prompt_length())
+        output = input_ids[0]
+        self.generate_params.update({'inputs': input_ids})
+        with torch.no_grad():
+            output = self.llm.model.generate(**self.generate_params)[0]
+            if not self.llm.cpu:
+                output = output.cuda()
+        new_tokens = len(output) - len(input_ids[0])
+        response = self.decode(output[-new_tokens:])
+        return response
