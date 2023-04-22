@@ -1,6 +1,6 @@
 import argparse
 import os
-from configs.model_config import *
+
 
 
 # Additional argparse types
@@ -36,7 +36,8 @@ parser = argparse.ArgumentParser(prog='langchina-ChatGLM',
 
 
 
-parser.add_argument('--model', type=str, help='Name of the model to load by default.')
+parser.add_argument('--no-remote-model',  action='store_true', default=False,  help='remote in the model on loader checkpoint, if your load local model to add the ` --no-remote-model`')
+parser.add_argument('--model', type=str, default='THUDM/chatglm-6b', help='Name of the model to load by default.')
 parser.add_argument('--lora', type=str, help='Name of the LoRA to apply to the model by default.')
 parser.add_argument("--model-dir", type=str, default='model/', help="Path to directory with all the models")
 parser.add_argument("--lora-dir", type=str, default='loras/', help="Path to directory with all the loras")
@@ -48,7 +49,7 @@ parser.add_argument('--gpu-memory', type=str, nargs="+", help='Maxmimum GPU memo
 parser.add_argument('--cpu-memory', type=str, help='Maximum CPU memory in GiB to allocate for offloaded weights. Same as above.')
 parser.add_argument('--load-in-8bit', action='store_true', help='Load the model with 8-bit precision.')
 parser.add_argument('--bf16', action='store_true', help='Load the model with bfloat16 precision. Requires NVIDIA Ampere GPU.')
-parser.add_argument('--trust-remote-code', action='store_true', help="Set trust_remote_code=True while loading a model. Necessary for ChatGLM.")
+parser.add_argument('--no-trust-remote-code', action='store_true', default=False, help="Set trust_remote_code=True while loading a model. Necessary for ChatGLM.")
 
 
 args = parser.parse_args([])
@@ -57,5 +58,5 @@ DEFAULT_ARGS = vars(args)
 
 
 # Security warnings
-if args.trust_remote_code:
+if not args.no_trust_remote_code:
     print("Warning: trust_remote_code is enabled. This is dangerous.\n")

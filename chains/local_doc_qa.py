@@ -3,6 +3,7 @@ from langchain.prompts import PromptTemplate
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.document_loaders import UnstructuredFileLoader
+from langchain.llms.base import LLM
 from models.chatglm_llm import ChatGLM
 import sentence_transformers
 import os
@@ -14,8 +15,6 @@ from textsplitter import ChineseTextSplitter
 # return top-k text chunk from vector store
 VECTOR_SEARCH_TOP_K = 6
 
-# LLM input history length
-LLM_HISTORY_LEN = 3
 
 
 def load_file(filepath):
@@ -34,20 +33,16 @@ class LocalDocQA:
     llm: object = None
     embeddings: object = None
 
+    def __init__(self):
+        self.top_k = VECTOR_SEARCH_TOP_K
+
     def init_cfg(self,
                  embedding_model: str = EMBEDDING_MODEL,
                  embedding_device=EMBEDDING_DEVICE,
-                 llm_history_len: int = LLM_HISTORY_LEN,
-                 llm_model: str = LLM_MODEL,
-                 llm_device=LLM_DEVICE,
-                 top_k=VECTOR_SEARCH_TOP_K,
-                 use_ptuning_v2: bool = USE_PTUNING_V2
+                 llm_model: LLM = None,
+                 top_k=VECTOR_SEARCH_TOP_K
                  ):
-        self.llm = ChatGLM()
-        self.llm.load_model(model_name_or_path=llm_model_dict[llm_model],
-                            llm_device=llm_device,
-                            use_ptuning_v2=use_ptuning_v2)
-        self.llm.history_len = llm_history_len
+        self.llm = llm_model
 
         self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_dict[embedding_model], )
         self.embeddings.client = sentence_transformers.SentenceTransformer(self.embeddings.model_name,
