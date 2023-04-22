@@ -9,6 +9,9 @@ from models.extensions.callback import (Iteratorize, Stream)
 
 class LLamaLLM(LLM):
     llm: LoaderLLM = None
+
+    history = []
+    history_len: int = 10
     generate_params: object = {'max_new_tokens': 200,
                                'do_sample': True,
                                'temperature': 0.7,
@@ -87,6 +90,36 @@ class LLamaLLM(LLM):
     def generate_with_streaming(self, callback=None, **kwargs):
         return Iteratorize(self.generate_with_callback, kwargs, callback)
 
+    # 将历史对话数组转换为文本格式
+    def history_to_text(self):
+        formatted_history = ''
+        history = self.history[-self.history_len:] if self.history_len > 0 else []
+        for entry in history:
+            role, content = entry
+            formatted_history += f"### {role}: {content}\n"
+        return formatted_history
+
+    def generate_softprompt_history_tensors(self, input_ids):
+        """
+        历史对话软提示
+            这段代码首先定义了一个名为 history_to_text 的函数，用于将 self.history
+            数组转换为所需的文本格式。然后，我们将格式化后的历史文本
+            再用 self.encode 将其转换为向量表示。最后，将历史对话向量与当前输入的对话向量拼接在一起。
+        :return:
+        """
+
+        # 对话内容
+        # 处理历史对话
+        formatted_history = self.history_to_text()
+        history_input_ids = self.encode(formatted_history, add_bos_token=self.state['add_bos_token'],
+                                        truncation_length=self.get_max_prompt_length())
+
+        # 将历史对话向量与当前对话向量拼接
+        inputs_embeds = torch.cat((history_input_ids, input_ids), dim=1)
+
+        filler_input_ids = torch.zeros((1, inputs_embeds.shape[1]), dtype=input_ids.dtype).to(self.llm.model.device)
+        return inputs_embeds, filler_input_ids
+
     def callmessage(self, prompt: str, ):
 
         input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
@@ -104,12 +137,20 @@ class LLamaLLM(LLM):
               stop: Optional[List[str]] = None) -> str:
         input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
                                 truncation_length=self.get_max_prompt_length())
+
+        # self.history[-self.history_len:] if self.history_len > 0 else []
         output = input_ids[0]
-        self.generate_params.update({'inputs': input_ids})
+        inputs_embeds, filler_input_ids = self.generate_softprompt_history_tensors(input_ids)
+        # self.generate_params.update({'inputs_embeds': inputs_embeds})
+        self.generate_params.update({'inputs': inputs_embeds})
         with torch.no_grad():
             output = self.llm.model.generate(**self.generate_params)[0]
             if not self.llm.cpu:
                 output = output.cuda()
+
+        output = torch.cat((input_ids[0], output[filler_input_ids.shape[1]:]))
         new_tokens = len(output) - len(input_ids[0])
         response = self.decode(output[-new_tokens:])
+
+        self.history = self.history + [[None, response]]
         return response
