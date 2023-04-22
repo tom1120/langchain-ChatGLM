@@ -7,6 +7,10 @@ import uvicorn
 from fastapi import FastAPI, File, UploadFile
 from pydantic import BaseModel
 from starlette.responses import RedirectResponse
+from models.loader.args import parser
+import models.shared as shared
+from models.loader import LoaderLLM
+from models.chatglm_llm import ChatGLM
 
 app = FastAPI()
 
@@ -33,11 +37,13 @@ async def document():
 @app.on_event("startup")
 async def get_local_doc_qa():
     global local_doc_qa
+
+    chatGLMLLM = ChatGLM(shared.loaderLLM)
+    chatGLMLLM.history_len = LLM_HISTORY_LEN
     local_doc_qa = LocalDocQA()
-    local_doc_qa.init_cfg(llm_model=LLM_MODEL,
+    local_doc_qa.init_cfg(llm_model=chatGLMLLM,
                           embedding_model=EMBEDDING_MODEL,
                           embedding_device=EMBEDDING_DEVICE,
-                          llm_history_len=LLM_HISTORY_LEN,
                           top_k=VECTOR_SEARCH_TOP_K)
     
 
@@ -94,6 +100,11 @@ async def get_answer(UserQuery: Query):
 
 
 if __name__ == "__main__":
+    args = None
+    args = parser.parse_args()
+    args_dict = vars(args)
+
+    shared.loaderLLM = LoaderLLM(args_dict)
     uvicorn.run(
         app='api:app', 
         host='0.0.0.0', 
