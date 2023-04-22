@@ -3,9 +3,8 @@ import json
 import os
 import re
 import time
-import zipfile
 from pathlib import Path
-
+from peft import PeftModel
 import numpy as np
 import torch
 import transformers
@@ -21,7 +20,9 @@ class LoaderLLM:
     model_name: str = None
     tokenizer: object = None
     model: object = None
+    lora_names: set = []
     model_dir: str = None
+    lora_dir: str = None
     cpu: bool = False
     gpu_memory: object = None
     cpu_memory: object = None
@@ -39,9 +40,11 @@ class LoaderLLM:
         """
         self.params = params or {}
         self.model_name = params.get('model', '')
+        self.lora = params.get('lora', '')
         self.model = None
         self.tokenizer = None
         self.model_dir = params.get('model_dir', '')
+        self.lora_dir = params.get('lora_dir', '')
         self.cpu = params.get('cpu', False)
         self.gpu_memory = params.get('gpu_memory', None)
         self.cpu_memory = params.get('cpu_memory', None)
@@ -50,6 +53,8 @@ class LoaderLLM:
         self.trust_remote_code = params.get('trust_remote_code', False)
         self.bf16 = params.get('bf16', False)
         self.reload_model()
+        if self.lora:
+            self._add_lora_to_model([self.lora])
 
     def _load_model(self, model_name):
         """
@@ -158,6 +163,55 @@ class LoaderLLM:
 
         print(f"Loaded the model in {(time.time()-t0):.2f} seconds.")
         return model, tokenizer
+
+    def _add_lora_to_model(self, lora_names):
+        # 目前加载的lora
+        prior_set = set(self.lora_names)
+        # 需要加载的
+        added_set = set(lora_names) - prior_set
+        # 删除的lora
+        removed_set = prior_set - set(lora_names)
+        self.lora_names = list(lora_names)
+
+        # Nothing to do = skip.
+        if len(added_set) == 0 and len(removed_set) == 0:
+            return
+
+        # Only adding, and already peft? Do it the easy way.
+        if len(removed_set) == 0 and len(prior_set) > 0:
+            print(f"Adding the LoRA(s) named {added_set} to the model...")
+            for lora in added_set:
+                self.model.load_adapter(Path(f"{self.lora_dir}/{lora}"), lora)
+            return
+
+        # If removing anything, disable all and re-add.
+        if len(removed_set) > 0:
+            shared.model.disable_adapter()
+
+        if len(lora_names) > 0:
+            print("Applying the following LoRAs to {}: {}".format(self.model_name, ', '.join(lora_names)))
+            params = {}
+            if not self.cpu:
+                params['dtype'] = self.model.dtype
+                if hasattr(self.model, "hf_device_map"):
+                    params['device_map'] = {"base_model.model." + k: v for k, v in self.model.hf_device_map.items()}
+                elif self.load_in_8bit:
+                    params['device_map'] = {'': 0}
+            self.model.resize_token_embeddings(len(self.tokenizer))
+
+            self.model = PeftModel.from_pretrained(self.model, Path(f"{self.lora_dir}/{lora_names[0]}"), **params)
+
+            for lora in lora_names[1:]:
+                self.model.load_adapter(Path(f"{self.lora_dir}/{lora}"), lora)
+
+            if not self.load_in_8bit and not self.cpu:
+
+                if not hasattr(self.model, "hf_device_map"):
+                    if torch.has_mps:
+                        device = torch.device('mps')
+                        self.model = self.model.to(device)
+                    else:
+                        self.model = self.model.cuda()
 
     def clear_torch_cache(self):
         gc.collect()
