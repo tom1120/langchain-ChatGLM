@@ -13,7 +13,7 @@ async def dispatch(args: Namespace):
 
     shared.loaderLLM = LoaderLLM(args_dict)
     llamaLLM = LLamaLLM(shared.loaderLLM)
-    llamaLLM._call(prompt="你好")
+    llamaLLM._call(prompt="你可以做什么?")
 
 
 
