@@ -12,3 +12,4 @@ gradio>=3.25.0
 accelerate==0.18.0
 llama-cpp-python==0.1.34; platform_system != "Windows"
 https://github.com/abetlen/llama-cpp-python/releases/download/v0.1.34/llama_cpp_python-0.1.34-cp310-cp310-win_amd64.whl; platform_system == "Windows"
+peft
