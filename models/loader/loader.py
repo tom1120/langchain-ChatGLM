@@ -34,8 +34,6 @@ class LoaderLLM:
     cpu_memory: object = None
     auto_devices: object = True
     load_in_8bit: bool = False
-    # 信任本地加载的模型
-    trust_remote_code: bool = False
     is_llamacpp: bool = False
     bf16: bool = False
     params: object = None
@@ -64,7 +62,6 @@ class LoaderLLM:
         self.cpu_memory = params.get('cpu_memory', None)
         self.auto_devices = params.get('auto_devices', True)
         self.load_in_8bit = params.get('load_in_8bit', False)
-        self.trust_remote_code = not params.get('no_trust_remote_code', False)
         self.bf16 = params.get('bf16', False)
         self.reload_model()
 
@@ -73,7 +70,7 @@ class LoaderLLM:
         if not self.no_remote_model:
             checkpoint = model_name
 
-        model_config = AutoConfig.from_pretrained(checkpoint, trust_remote_code=self.trust_remote_code)
+        model_config = AutoConfig.from_pretrained(checkpoint, trust_remote_code=True)
 
         return model_config
 
@@ -96,10 +93,8 @@ class LoaderLLM:
 
         if 'chatglm' in model_name.lower():
             LoaderClass = AutoModel
-            trust_remote_code = self.trust_remote_code
         else:
             LoaderClass = AutoModelForCausalLM
-            trust_remote_code = False
 
         # Load the model in simple 16-bit mode by default
         if not any([self.cpu, self.load_in_8bit, self.auto_devices, self.gpu_memory is not None, self.cpu_memory is not None, self.is_llamacpp]):
@@ -113,7 +108,7 @@ class LoaderLLM:
                                                     low_cpu_mem_usage=True,
                                                     config=self.model_config,
                                                     torch_dtype=torch.bfloat16 if self.bf16 else torch.float16,
-                                                    trust_remote_code=trust_remote_code)
+                                                    trust_remote_code=True)
                         .half()
                         .cuda()
                     )
@@ -124,7 +119,7 @@ class LoaderLLM:
                                                         low_cpu_mem_usage=True,
                                                         config=self.model_config,
                                                         torch_dtype=torch.bfloat16 if self.bf16 else torch.float16,
-                                                        trust_remote_code=trust_remote_code).half()
+                                                        trust_remote_code=True).half()
                     # 可传入device_map自定义每张卡的部署情况
                     if self.device_map is None:
                         device_map = self.auto_configure_device_map(num_gpus)
@@ -161,7 +156,7 @@ class LoaderLLM:
                 params["torch_dtype"] = torch.float32
             else:
                 params["device_map"] = 'auto'
-                params["trust_remote_code"] = trust_remote_code
+                params["trust_remote_code"] = True
                 if self.load_in_8bit and any((self.auto_devices, self.gpu_memory)):
                     params['quantization_config'] = BitsAndBytesConfig(load_in_8bit=True, llm_int8_enable_fp32_cpu_offload=True)
                 elif self.load_in_8bit:
@@ -220,7 +215,7 @@ class LoaderLLM:
             except:
                 pass
         else:
-            tokenizer = AutoTokenizer.from_pretrained(checkpoint, trust_remote_code=trust_remote_code)
+            tokenizer = AutoTokenizer.from_pretrained(checkpoint, trust_remote_code=True)
 
         print(f"Loaded the model in {(time.time()-t0):.2f} seconds.")
         return model, tokenizer
