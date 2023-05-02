@@ -2,13 +2,28 @@ from langchain.llms.base import LLM
 
 import torch
 import transformers
-from typing import Optional, List
-from models.loader import LoaderLLM
-from models.extensions.callback import (Iteratorize, Stream)
+from typing import Optional, List, Dict, Any
+from models.loader import LoaderCheckPoint
+from models.extensions.callback import (Iteratorize, Stream, FixedLengthQueue)
+import models.shared as shared
+
+
+def _streaming_response_template() -> Dict[str, Any]:
+    """
+    :return: 响应结构
+    """
+    return {
+        "text": ""
+    }
+
+
+def _update_response(response: Dict[str, Any], stream_response: str) -> None:
+    """Update response from the stream response."""
+    response["text"] += stream_response
 
 
 class LLamaLLM(LLM):
-    llm: LoaderLLM = None
+    llm: LoaderCheckPoint = None
 
     history = []
     history_len: int = 10
@@ -46,7 +61,7 @@ class LLamaLLM(LLM):
                      'load_in_8bit': False, 'wbits': 'None', 'groupsize': 'None', 'model_type': 'None',
                      'pre_layer': 0, 'gpu_memory_0': 0}
 
-    def __init__(self, llm: LoaderLLM = None):
+    def __init__(self, llm: LoaderCheckPoint = None):
         super().__init__()
         self.llm = llm
 
@@ -143,14 +158,35 @@ class LLamaLLM(LLM):
         inputs_embeds, filler_input_ids = self.generate_softprompt_history_tensors(input_ids)
         # self.generate_params.update({'inputs_embeds': inputs_embeds})
         self.generate_params.update({'inputs': inputs_embeds})
-        with torch.no_grad():
-            output = self.llm.model.generate(**self.generate_params)[0]
-            if not self.llm.cpu:
-                output = output.cuda()
 
-        output = torch.cat((input_ids[0], output[filler_input_ids.shape[1]:]))
-        new_tokens = len(output) - len(input_ids[0])
-        response = self.decode(output[-new_tokens:])
+        shared.stop_everything = False
+        stopped = False
+        response_template = _streaming_response_template()
+        with self.generate_with_streaming(**self.generate_params) as generator:
+            last_reply_index = 0
+            # Create a FixedLengthQueue with the desired stop sequence and a maximum length.
+            queue = FixedLengthQueue(stop)
+            for output in generator:
+                new_tokens = len(output) - len(input_ids[0])
+                reply = self.decode(output[-new_tokens:])
+
+                new_reply = len(reply)-last_reply_index
+                output_reply = reply[-new_reply:]
+
+                if last_reply_index > 0 or new_tokens == self.generate_params['max_new_tokens'] - 1 or stopped:
+                    if stop:
+                        queue.add(output_reply)
+                        pos = queue.contains_stop_sequence()
+                        if pos != -1:
+                            shared.stop_everything = True
+                            stopped = True
+
+                _update_response(response_template, output_reply)
+                last_reply_index = len(reply)
+                if stopped:
+                    break
+
+        response = response_template['text']
 
         self.history = self.history + [[None, response]]
         return response

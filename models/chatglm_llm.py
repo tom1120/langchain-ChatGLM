@@ -1,29 +1,23 @@
 import json
-from langchain.llms.base import LLM
+from langchain.llms.base import BaseLLM
 from typing import Optional, List
 from langchain.llms.utils import enforce_stop_tokens
 
-from transformers import AutoTokenizer, AutoModel, AutoConfig
-import torch
+from models.loader.args import parser
 from configs.model_config import *
-from langchain.callbacks.base import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from typing import Dict, Tuple, Union, Optional
-from models.loader import LoaderLLM
+from models.loader import LoaderCheckPoint
 
 
-class ChatGLM(LLM):
+class ChatGLM(BaseLLM):
     max_token: int = 10000
     temperature: float = 0.01
     top_p = 0.9
-    llm: LoaderLLM = None
+    llm: LoaderCheckPoint = None
     # history = []
-    tokenizer: object = None
-    model: object = None
     history_len: int = 10
-    callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
-    def __init__(self, llm: LoaderLLM = None):
+    def __init__(self, llm: LoaderCheckPoint = None):
         super().__init__()
         self.llm = llm
 
@@ -36,28 +30,28 @@ class ChatGLM(LLM):
               history: List[List[str]] = [],
               streaming: bool = STREAMING):  # -> Tuple[str, List[List[str]]]:
         if streaming:
-            for inum, (stream_resp, _) in enumerate(self.model.stream_chat(
-                    self.tokenizer,
+            for inum, (stream_resp, _) in enumerate(self.llm.model.stream_chat(
+                    self.llm.tokenizer,
                     prompt,
                     history=history[-self.history_len:-1] if self.history_len > 0 else [],
                     max_length=self.max_token,
                     temperature=self.temperature,
             )):
-                torch_gc(DEVICE)
+                self.llm.clear_torch_cache()
                 if inum == 0:
                     history += [[prompt, stream_resp]]
                 else:
                     history[-1] = [prompt, stream_resp]
                 yield stream_resp, history
         else:
-            response, _ = self.model.chat(
-                    self.tokenizer,
-                    prompt,
-                    history=history[-self.history_len:] if self.history_len > 0 else [],
-                    max_length=self.max_token,
-                    temperature=self.temperature,
+            response, _ = self.llm.model.chat(
+                self.llm.tokenizer,
+                prompt,
+                history=history[-self.history_len:] if self.history_len > 0 else [],
+                max_length=self.max_token,
+                temperature=self.temperature,
             )
-            torch_gc(DEVICE)
+            self.llm.clear_torch_cache()
             history += [[prompt, response]]
             yield response, history
 
@@ -75,12 +69,17 @@ class ChatGLM(LLM):
     #     return response
 
 
-
 if __name__ == "__main__":
-    llm = ChatGLM()
-    llm.load_model(model_name_or_path=llm_model_dict[LLM_MODEL],
-                   llm_device=LLM_DEVICE, )
-    last_print_len=0
+    # 初始化消息
+    args = None
+    args = parser.parse_args()
+
+    args_dict = vars(args)
+    loaderLLM = LoaderCheckPoint(args_dict)
+    llm = ChatGLM(loaderLLM)
+    llm.history_len = 10
+
+    last_print_len = 0
     for resp, history in llm._call("你好", streaming=True):
         print(resp[last_print_len:], end="", flush=True)
         last_print_len = len(resp)

@@ -13,9 +13,9 @@ from transformers import (AutoConfig, AutoModel, AutoModelForCausalLM,
                           AutoTokenizer, BitsAndBytesConfig, LlamaTokenizer)
 
 
-class LoaderLLM:
+class LoaderCheckPoint:
     """
-    加载自定义 model
+    加载自定义 model CheckPoint
     """
     # remote in the model on loader checkpoint
     no_remote_model: bool = False
@@ -33,6 +33,7 @@ class LoaderLLM:
     gpu_memory: object = None
     cpu_memory: object = None
     auto_devices: object = True
+    # 如果开启了8bit量化加载,项目无法启动，参考此位置，选择合适的cuda版本，https://github.com/TimDettmers/bitsandbytes/issues/156
     load_in_8bit: bool = False
     is_llamacpp: bool = False
     bf16: bool = False
@@ -90,14 +91,14 @@ class LoaderLLM:
         if not self.no_remote_model:
             checkpoint = model_name
 
-
         if 'chatglm' in model_name.lower():
             LoaderClass = AutoModel
         else:
             LoaderClass = AutoModelForCausalLM
 
         # Load the model in simple 16-bit mode by default
-        if not any([self.cpu, self.load_in_8bit, self.auto_devices, self.gpu_memory is not None, self.cpu_memory is not None, self.is_llamacpp]):
+        if not any([self.cpu, self.load_in_8bit, self.auto_devices, self.gpu_memory is not None,
+                    self.cpu_memory is not None, self.is_llamacpp]):
 
             if torch.cuda.is_available() and self.llm_device.lower().startswith("cuda"):
                 # 根据当前设备GPU数量决定是否进行多卡部署
@@ -126,7 +127,8 @@ class LoaderLLM:
 
                     model = dispatch_model(model, device_map=device_map)
             else:
-                print("Warning: torch.cuda.is_available() returned False.\nThis means that no GPU has been detected.\nFalling back to CPU mode.\n")
+                print(
+                    "Warning: torch.cuda.is_available() returned False.\nThis means that no GPU has been detected.\nFalling back to CPU mode.\n")
                 model = (
                     AutoModel.from_pretrained(
                         checkpoint,
@@ -149,7 +151,8 @@ class LoaderLLM:
         else:
             params = {"low_cpu_mem_usage": True}
             if not any((self.cpu, torch.cuda.is_available(), torch.has_mps)):
-                print("Warning: torch.cuda.is_available() returned False.\nThis means that no GPU has been detected.\nFalling back to CPU mode.\n")
+                print(
+                    "Warning: torch.cuda.is_available() returned False.\nThis means that no GPU has been detected.\nFalling back to CPU mode.\n")
                 self.cpu = True
 
             if self.cpu:
@@ -158,10 +161,11 @@ class LoaderLLM:
                 params["device_map"] = 'auto'
                 params["trust_remote_code"] = True
                 if self.load_in_8bit and any((self.auto_devices, self.gpu_memory)):
-                    params['quantization_config'] = BitsAndBytesConfig(load_in_8bit=True, llm_int8_enable_fp32_cpu_offload=True)
+                    params['quantization_config'] = BitsAndBytesConfig(load_in_8bit=True,
+                                                                       llm_int8_enable_fp32_cpu_offload=True)
                 elif self.load_in_8bit:
                     params['quantization_config'] = BitsAndBytesConfig(load_in_8bit=True)
-                elif shared.args.bf16:
+                elif self.bf16:
                     params["torch_dtype"] = torch.bfloat16
                 else:
                     params["torch_dtype"] = torch.float16
@@ -171,7 +175,8 @@ class LoaderLLM:
                     max_cpu_memory = self.cpu_memory.strip() if self.cpu_memory is not None else '99GiB'
                     max_memory = {}
                     for i in range(len(memory_map)):
-                        max_memory[i] = f'{memory_map[i]}GiB' if not re.match('.*ib$', memory_map[i].lower()) else memory_map[i]
+                        max_memory[i] = f'{memory_map[i]}GiB' if not re.match('.*ib$', memory_map[i].lower()) else \
+                        memory_map[i]
                     max_memory['cpu'] = max_cpu_memory
                     params['max_memory'] = max_memory
                 elif self.auto_devices:
@@ -180,11 +185,11 @@ class LoaderLLM:
                     if total_mem - suggestion < 800:
                         suggestion -= 1000
                     suggestion = int(round(suggestion / 1000))
-                    print(f"\033[1;32;1mAuto-assiging --gpu-memory {suggestion} for your GPU to try to prevent out-of-memory errors.\nYou can manually set other values.\033[0;37;0m")
+                    print(
+                        f"\033[1;32;1mAuto-assiging --gpu-memory {suggestion} for your GPU to try to prevent out-of-memory errors.\nYou can manually set other values.\033[0;37;0m")
 
                     max_memory = {0: f'{suggestion}GiB', 'cpu': f'{self.cpu_memory or 99}GiB'}
                     params['max_memory'] = max_memory
-
 
             if self.load_in_8bit and params.get('max_memory', None) is not None and params['device_map'] == 'auto':
                 config = AutoConfig.from_pretrained(checkpoint)
@@ -199,7 +204,7 @@ class LoaderLLM:
                         dtype=torch.int8,
                         max_memory=params['max_memory'],
                         no_split_module_classes=model._no_split_modules
-                )
+                    )
 
             model = AutoModelForCausalLM.from_pretrained(checkpoint, **params)
 
@@ -217,7 +222,7 @@ class LoaderLLM:
         else:
             tokenizer = AutoTokenizer.from_pretrained(checkpoint, trust_remote_code=True)
 
-        print(f"Loaded the model in {(time.time()-t0):.2f} seconds.")
+        print(f"Loaded the model in {(time.time() - t0):.2f} seconds.")
         return model, tokenizer
 
     def auto_configure_device_map(num_gpus: int) -> Dict[str, int]:
@@ -271,7 +276,7 @@ class LoaderLLM:
 
         # If removing anything, disable all and re-add.
         if len(removed_set) > 0:
-            shared.model.disable_adapter()
+            self.model.disable_adapter()
 
         if len(lora_names) > 0:
             print("Applying the following LoRAs to {}: {}".format(self.model_name, ', '.join(lora_names)))
@@ -306,8 +311,6 @@ class LoaderLLM:
             with torch.cuda.device(CUDA_DEVICE):
                 torch.cuda.empty_cache()
                 torch.cuda.ipc_collect()
-
-
 
     def unload_model(self):
         self.model = self.tokenizer = None
