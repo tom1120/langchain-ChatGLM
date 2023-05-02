@@ -194,7 +194,7 @@ class LoaderCheckPoint:
             if self.load_in_8bit and params.get('max_memory', None) is not None and params['device_map'] == 'auto':
                 config = AutoConfig.from_pretrained(checkpoint)
                 with init_empty_weights():
-                    model = AutoModelForCausalLM.from_config(config)
+                    model = LoaderClass.from_config(config)
                 model.tie_weights()
                 if self.device_map is not None:
                     params['device_map'] = self.device_map
@@ -206,7 +206,7 @@ class LoaderCheckPoint:
                         no_split_module_classes=model._no_split_modules
                     )
 
-            model = AutoModelForCausalLM.from_pretrained(checkpoint, **params)
+            model = LoaderClass.from_pretrained(checkpoint, **params)
 
         # Loading the tokenizer
         if type(model) is transformers.LlamaForCausalLM:

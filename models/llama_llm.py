@@ -135,18 +135,6 @@ class LLamaLLM(LLM):
         filler_input_ids = torch.zeros((1, inputs_embeds.shape[1]), dtype=input_ids.dtype).to(self.llm.model.device)
         return inputs_embeds, filler_input_ids
 
-    def callmessage(self, prompt: str, ):
-
-        input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
-                                truncation_length=self.get_max_prompt_length())
-        self.generate_params.update({'inputs': input_ids})
-
-        with self.generate_with_streaming(**self.generate_params) as generator:
-            for output in generator:
-                new_tokens = len(output) - len(input_ids[0])
-                reply = self.decode(output[-new_tokens:])
-                print(reply)
-
     def _call(self,
               prompt: str,
               stop: Optional[List[str]] = None) -> str:

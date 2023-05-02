@@ -1,6 +1,12 @@
+import sys
+
 import gradio as gr
 import os
 import shutil
+
+
+from models.loader.args import parser
+from models.loader import LoaderCheckPoint
 from chains.local_doc_qa import LocalDocQA
 from configs.model_config import *
 import nltk
@@ -83,14 +89,8 @@ def init_model(llm_model: LLM = None):
 def reinit_model(llm_model, embedding_model, llm_history_len, no_remote_model, use_ptuning_v2, top_k, history):
     try:
 
-        llm_model_info = llm_model_dict[llm_model]
-
-        shared.loaderLLM.model_name = llm_model_info['path']
-        shared.loaderLLM.no_remote_model = no_remote_model
-        shared.loaderLLM.use_ptuning_v2 = use_ptuning_v2
-        shared.loaderLLM.reload_model()
-        llm_model_ins = llm_model_info['provides'](shared.loaderLLM)
-
+        llm_model_ins = shared.loaderLLM(llm_model,no_remote_model,use_ptuning_v2)
+        llm_model_ins.history_len = llm_history_len
         local_doc_qa.init_cfg(llm_model=llm_model_ins,
                               embedding_model=embedding_model,
                               top_k=top_k)
@@ -179,11 +179,11 @@ args = None
 args = parser.parse_args()
 
 args_dict = vars(args)
-shared.loaderLLM = LoaderLLM(args_dict)
-chatGLMLLM = ChatGLM(shared.loaderLLM)
-chatGLMLLM.history_len = LLM_HISTORY_LEN
+shared.loaderCheckPoint = LoaderCheckPoint(args_dict)
+llm_model_ins = shared.loaderLLM()
+llm_model_ins.history_len = LLM_HISTORY_LEN
 
-model_status = init_model(llm_model=chatGLMLLM)
+model_status = init_model(llm_model=llm_model_ins)
 
 with gr.Blocks(css=block_css) as demo:
     vs_path, file_status, model_status, vs_list = gr.State(""), gr.State(""), gr.State(model_status), gr.State(vs_list)
@@ -262,7 +262,7 @@ with gr.Blocks(css=block_css) as demo:
                              value=LLM_MODEL,
                              interactive=True)
 
-        no_remote_model = gr.Checkbox(shared.loaderLLM.no_remote_model,
+        no_remote_model = gr.Checkbox(shared.LoaderCheckPoint.no_remote_model,
                                       label="加载本地模型",
                                       interactive=True)
         llm_history_len = gr.Slider(0,

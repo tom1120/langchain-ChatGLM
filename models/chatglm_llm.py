@@ -1,5 +1,5 @@
 import json
-from langchain.llms.base import BaseLLM
+from langchain.llms.base import LLM
 from typing import Optional, List
 from langchain.llms.utils import enforce_stop_tokens
 
@@ -9,7 +9,7 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from models.loader import LoaderCheckPoint
 
 
-class ChatGLM(BaseLLM):
+class ChatGLM(LLM):
     max_token: int = 10000
     temperature: float = 0.01
     top_p = 0.9
