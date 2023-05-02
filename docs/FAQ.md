@@ -20,18 +20,29 @@ $ pip install -e .
 
 Q3: 使用过程中 Python 包`nltk`发生了`Resource punkt not found.`报错，该如何解决？
 
-A3: https://github.com/nltk/nltk_data/raw/gh-pages/packages/tokenizers/punkt.zip 中的 `packages/tokenizers` 解压，放到  `nltk_data/tokenizers` 存储路径下。
+A3: 方法一：https://github.com/nltk/nltk_data/raw/gh-pages/packages/tokenizers/punkt.zip 中的 `packages/tokenizers` 解压，放到  `nltk_data/tokenizers` 存储路径下。
 
  `nltk_data` 存储路径可以通过 `nltk.data.path` 查询。
+ 
+ 方法二：执行python代码
+``` 
+import nltk
+nltk.download()
+``` 
 
 ---
 
 Q4: 使用过程中 Python 包`nltk`发生了`Resource averaged_perceptron_tagger not found.`报错，该如何解决？
 
-A4: 将 https://github.com/nltk/nltk_data/blob/gh-pages/packages/taggers/averaged_perceptron_tagger.zip 下载，解压放到 `nltk_data/taggers` 存储路径下。
+A4: 方法一：将 https://github.com/nltk/nltk_data/blob/gh-pages/packages/taggers/averaged_perceptron_tagger.zip 下载，解压放到 `nltk_data/taggers` 存储路径下。
 
- `nltk_data` 存储路径可以通过 `nltk.data.path` 查询。
-
+ `nltk_data` 存储路径可以通过 `nltk.data.path` 查询。  
+ 
+方法二：执行python代码
+``` 
+import nltk
+nltk.download()
+``` 
 ---
 
 Q5: 本项目可否在 colab 中运行？
@@ -84,7 +95,7 @@ Q9: 下载完模型后，如何修改代码以执行本地模型？
 
 A9: 模型下载完成后，请在 [configs/model_config.py](../configs/model_config.py) 文件中，对`embedding_model_dict`和`llm_model_dict`参数进行修改，如把`llm_model_dict`从
 
-```json
+```python
 embedding_model_dict = {
     "ernie-tiny": "nghuyong/ernie-3.0-nano-zh",
     "ernie-base": "nghuyong/ernie-3.0-base-zh",
@@ -94,11 +105,17 @@ embedding_model_dict = {
 
 修改为
 
-```json
+```python
 embedding_model_dict = {
                         "ernie-tiny": "nghuyong/ernie-3.0-nano-zh",
                         "ernie-base": "nghuyong/ernie-3.0-base-zh",
                         "text2vec": "/Users/liuqian/Downloads/ChatGLM-6B/text2vec-large-chinese"
 }
 ```
+---
 
+Q10: 执行`python cli_demo.py`过程中，显卡内存爆了，提示"OutOfMemoryError: CUDA out of memory"
+
+A10: 将 `VECTOR_SEARCH_TOP_K` 和 `LLM_HISTORY_LEN` 的值调低，比如 `VECTOR_SEARCH_TOP_K = 5` 和 `LLM_HISTORY_LEN = 2`，这样由 `query` 和 `context` 拼接得到的 `prompt` 会变短，会减少内存的占用。
+
+---
