@@ -141,6 +141,7 @@ $ python webui.py
 ```
 
 注：如未将模型下载至本地，请执行前检查`$HOME/.cache/huggingface/`文件夹剩余空间，至少15G。
+注：一些其它的可选启动项见[项目启动选项](docs/StartOption.md)
 
 执行后效果如下图所示：
 ![webui](img/webui_0419.png)
