@@ -1,7 +1,5 @@
 import torch.cuda
 import torch.backends
-from models.chatglm_llm import *
-from models.llama_llm import LLamaLLM
 import os
 
 embedding_model_dict = {
@@ -18,22 +16,29 @@ EMBEDDING_MODEL = "text2vec"
 EMBEDDING_DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
 # supported LLM models
+"""
+llm_model_dict 处理了loader的一些预设行为，如加载位置，模型名称，模型处理器实例
+"""
 llm_model_dict = {
     "chatglm-6b-int4-qe": {
         "path": "THUDM/chatglm-6b-int4-qe",
-        "provides": ChatGLM
+        "provides": "ChatGLM"
     },
     "chatglm-6b-int4": {
         "path": "THUDM/chatglm-6b-int4",
-        "provides": ChatGLM
+        "provides": "ChatGLM"
     },
     "chatglm-6b": {
-        "path": "THUDM/chatglm-6b",
-        "provides": ChatGLM
+        "path": "THUDM/chatglm-6b-int4",
+        "provides": "ChatGLM"
     },
     "llama-7b-hf": {
         "path": "llama-7b-hf",
-        "provides": LLamaLLM
+        "provides": "LLamaLLM"
+    },
+    "vicuna-13b-hf": {
+        "path": "vicuna-13b-hf",
+        "provides": "LLamaLLM"
     },
     "chatyuan": {
         "path": "ClueAI/ChatYuan-large-v2",
@@ -41,7 +46,7 @@ llm_model_dict = {
     },
     "chatglm-6b-int8":{
         "path":  "THUDM/chatglm-6b-int8",
-        "provides": ChatGLM
+        "provides": "ChatGLM"
     },
 }
 
