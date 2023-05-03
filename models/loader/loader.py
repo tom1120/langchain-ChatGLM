@@ -22,6 +22,8 @@ class LoaderCheckPoint:
     # 模型名称
     model_name: str = None
     tokenizer: object = None
+    # 模型全路径
+    model_path: str = None
     model: object = None
     model_config: object = None
     lora_names: set = []
@@ -48,6 +50,7 @@ class LoaderCheckPoint:
         模型初始化
         :param params:
         """
+        self.model_path = None
         self.params = params or {}
         self.no_remote_model = params.get('no_remote_model', False)
         self.model_name = params.get('model', '')
@@ -64,12 +67,15 @@ class LoaderCheckPoint:
         self.auto_devices = params.get('auto_devices', True)
         self.load_in_8bit = params.get('load_in_8bit', False)
         self.bf16 = params.get('bf16', False)
-        self.reload_model()
 
     def _load_model_config(self, model_name):
         checkpoint = Path(f'{self.model_dir}/{model_name}')
-        if not self.no_remote_model:
-            checkpoint = model_name
+
+        if self.model_path:
+            checkpoint = Path(f'{self.model_path}')
+        else:
+            if not self.no_remote_model:
+                checkpoint = model_name
 
         model_config = AutoConfig.from_pretrained(checkpoint, trust_remote_code=True)
 
@@ -88,8 +94,11 @@ class LoaderCheckPoint:
 
         self.is_llamacpp = len(list(checkpoint.glob('ggml*.bin'))) > 0
 
-        if not self.no_remote_model:
-            checkpoint = model_name
+        if self.model_path:
+            checkpoint = Path(f'{self.model_path}')
+        else:
+            if not self.no_remote_model:
+                checkpoint = model_name
 
         if 'chatglm' in model_name.lower():
             LoaderClass = AutoModel
@@ -315,6 +324,9 @@ class LoaderCheckPoint:
     def unload_model(self):
         self.model = self.tokenizer = None
         self.clear_torch_cache()
+
+    def set_model_path(self, model_path):
+        self.model_path = model_path
 
     def reload_model(self):
         self.unload_model()

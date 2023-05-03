@@ -6,7 +6,7 @@ embedding_model_dict = {
     "ernie-tiny": "nghuyong/ernie-3.0-nano-zh",
     "ernie-base": "nghuyong/ernie-3.0-base-zh",
     "text2vec-base": "shibing624/text2vec-base-chinese",
-    "text2vec": "/media/mnt/text2vec-large-chinese/",
+    "text2vec": "GanymedeNil/text2vec-large-chinese",
 }
 
 # Embedding model name
@@ -23,36 +23,43 @@ llm_model_dict = {
     "chatglm-6b-int4-qe": {
         "name": "chatglm-6b-int4-qe",
         "remote-checkpoint": "THUDM/chatglm-6b-int4-qe",
+        "path": None,
         "provides": "ChatGLM"
     },
     "chatglm-6b-int4": {
         "name": "chatglm-6b-int4",
         "remote-checkpoint": "THUDM/chatglm-6b-int4",
+        "path": None,
         "provides": "ChatGLM"
     },
     "chatglm-6b": {
         "name": "chatglm-6b",
         "remote-checkpoint": "THUDM/chatglm-6b-int4",
+        "path": None,
         "provides": "ChatGLM"
     },
     "llama-7b-hf": {
         "name": "llama-7b-hf",
         "remote-checkpoint": "llama-7b-hf",
+        "path": None,
         "provides": "LLamaLLM"
     },
     "vicuna-13b-hf": {
         "name": "vicuna-13b-hf",
         "remote-checkpoint": "vicuna-13b-hf",
+        "path": None,
         "provides": "LLamaLLM"
     },
     "chatyuan": {
         "name": "chatyuan",
         "remote-checkpoint": "ClueAI/ChatYuan-large-v2",
+        "path": None,
         "provides": None
     },
     "chatglm-6b-int8":{
         "name": "chatglm-6b-int8",
         "remote-checkpoint":  "THUDM/chatglm-6b-int8",
+        "path": None,
         "provides": "ChatGLM"
     },
 }
