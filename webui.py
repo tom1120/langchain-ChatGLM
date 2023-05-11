@@ -55,8 +55,11 @@ def get_answer(query, vs_path, history, mode,
             history[-1][-1] += source
             yield history, ""
     else:
-        for resp, history in local_doc_qa.llm._call(query, history,
+        for answer_result in local_doc_qa.llm.generatorAnswer(prompt=query, history=history,
                                                     streaming=streaming):
+
+            resp = answer_result.llm_output["answer"]
+            history = answer_result.history
             history[-1][-1] = resp + (
                 "\n\n当前知识库为空，如需基于知识库进行问答，请先加载知识库后，再进行提问。" if mode == "知识库问答" else "")
             yield history, ""
@@ -71,7 +74,10 @@ def update_status(history, status):
 def init_model(llm_model: LLM = None):
     try:
         local_doc_qa.init_cfg(llm_model=llm_model)
-        local_doc_qa.llm._call("你好")
+        generator = local_doc_qa.llm.generatorAnswer("你好")
+        for answer_result in generator:
+            print(answer_result.llm_output)
+
         reply = """模型已成功加载，可以开始对话，或从右侧选择模式后开始对话"""
         print(reply)
         return reply

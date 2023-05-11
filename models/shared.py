@@ -40,6 +40,5 @@ def loaderLLM(llm_model: str = None, no_remote_model: bool = False, use_ptuning_
     loaderCheckPoint.reload_model()
 
     provides_class = getattr(sys.modules['models'], llm_model_info['provides'])
-    modelInsLLM = provides_class(llm=loaderCheckPoint)
-
+    modelInsLLM = provides_class(checkPoint=loaderCheckPoint)
     return modelInsLLM

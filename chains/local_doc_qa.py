@@ -14,7 +14,6 @@ from utils import torch_gc
 # return top-k text chunk from vector store
 VECTOR_SEARCH_TOP_K = 6
 
-
 DEVICE_ = EMBEDDING_DEVICE
 DEVICE_ID = "0" if torch.cuda.is_available() else None
 DEVICE = f"{DEVICE_}:{DEVICE_ID}" if DEVICE_ID else DEVICE_
@@ -87,7 +86,7 @@ def similarity_search_with_score_by_vector(
                     _id0 = self.index_to_docstore_id[l]
                     doc0 = self.docstore.search(_id0)
                     if docs_len + len(doc0.page_content) > self.chunk_size:
-                        break_flag=True
+                        break_flag = True
                         break
                     elif doc0.metadata["source"] == doc.metadata["source"]:
                         docs_len += len(doc0.page_content)
@@ -211,12 +210,14 @@ class LocalDocQA:
         #                     "source_documents": related_docs}
         #         yield response, history
         # else:
-        for result, history in self.llm._call(prompt=prompt,
-                                              history=chat_history,
-                                              streaming=streaming):
+
+        for answer_result in self.llm.generatorAnswer(prompt=prompt, history=chat_history,
+                                                      streaming=streaming):
+            resp = answer_result.llm_output["answer"]
+            history = answer_result.history
             history[-1][0] = query
             response = {"query": query,
-                        "result": result,
+                        "result": resp,
                         "source_documents": related_docs}
             yield response, history
 
