@@ -137,6 +137,52 @@ class LLamaLLM(LLM):
 
     def _call(self,
               prompt: str,
+              stop: Optional[List[str]] = None,
+              history: List[List[str]] = [],
+              streaming: bool = False) -> str:
+        input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
+                                truncation_length=self.get_max_prompt_length())
+
+        # self.history[-self.history_len:] if self.history_len > 0 else []
+        output = input_ids[0]
+        inputs_embeds, filler_input_ids = self.generate_softprompt_history_tensors(input_ids)
+        # self.generate_params.update({'inputs_embeds': inputs_embeds})
+        self.generate_params.update({'inputs': inputs_embeds})
+
+        shared.stop_everything = False
+        stopped = False
+        response_template = _streaming_response_template()
+        with self.generate_with_streaming(**self.generate_params) as generator:
+            last_reply_index = 0
+            # Create a FixedLengthQueue with the desired stop sequence and a maximum length.
+            queue = FixedLengthQueue(stop)
+            for output in generator:
+                new_tokens = len(output) - len(input_ids[0])
+                reply = self.decode(output[-new_tokens:])
+
+                new_reply = len(reply)-last_reply_index
+                output_reply = reply[-new_reply:]
+
+                if last_reply_index > 0 or new_tokens == self.generate_params['max_new_tokens'] - 1 or stopped:
+                    if stop:
+                        queue.add(output_reply)
+                        pos = queue.contains_stop_sequence()
+                        if pos != -1:
+                            shared.stop_everything = True
+                            stopped = True
+
+                _update_response(response_template, output_reply)
+                last_reply_index = len(reply)
+                if stopped:
+                    break
+
+        response = response_template['text']
+
+        self.history = self.history + [[None, response]]
+        return response
+
+    def _call(self,
+              prompt: str,
               stop: Optional[List[str]] = None) -> str:
         input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
                                 truncation_length=self.get_max_prompt_length())
