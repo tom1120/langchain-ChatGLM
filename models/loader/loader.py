@@ -322,6 +322,8 @@ class LoaderCheckPoint:
                 torch.cuda.ipc_collect()
 
     def unload_model(self):
+        del self.model
+        del self.tokenizer
         self.model = self.tokenizer = None
         self.clear_torch_cache()
 
