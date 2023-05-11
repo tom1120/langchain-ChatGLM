@@ -44,6 +44,8 @@ class AnswerResultStream:
 class AnswerResultQueueSentinelTokenListenerQueue(transformers.StoppingCriteria):
     """
      定义模型stopping_criteria 监听者，在每次响应时将队列数据同步到AnswerResult
+     实现此监听器的目的是，不同模型的预测输出可能不是矢量信息，hf框架可以自定义transformers.StoppingCriteria入参来接收每次预测的Tensor和损失函数，
+     输出值可用于 generatorAnswer generate_with_streaming的自定义参数观测，以实现更加精细的控制
     """
 
     listenerQueue: deque = deque(maxlen=1)
@@ -157,7 +159,8 @@ class BaseAnswer(ABC):
 
         with generate_with_streaming(prompt=prompt, history=history, streaming=streaming) as generator:
             for answerResult in generator:
-                output = answerResult.listenerToken.input_ids
+                if answerResult.listenerToken:
+                    output = answerResult.listenerToken.input_ids
                 yield answerResult
 
     @abstractmethod

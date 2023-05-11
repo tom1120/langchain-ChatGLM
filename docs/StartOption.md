@@ -1,6 +1,6 @@
 
 #### 项目启动选项
-```aidl
+```test
 usage: langchina-ChatGLM [-h] [--no-remote-model] [--model MODEL] [--lora LORA] [--model-dir MODEL_DIR] [--lora-dir LORA_DIR] [--cpu] [--auto-devices] [--gpu-memory GPU_MEMORY [GPU_MEMORY ...]] [--cpu-memory CPU_MEMORY]
                          [--load-in-8bit] [--bf16]
 

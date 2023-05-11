@@ -19,7 +19,7 @@
 ![实现原理图2](img/langchain+chatglm2.png)
 
 项目目录结构
-```aidl
+```text
 .
 ├── agent
 │   └── agent实现
