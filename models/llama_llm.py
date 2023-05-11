@@ -199,7 +199,8 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
                          history: List[List[str]] = [],
                          streaming: bool = False,
                          generate_with_callback: AnswerResultStream = None) -> None:
-        self.history = history
+        if history:
+            self.history = history
         # Create the StoppingCriteriaList with the stopping strings
         stopping_criteria_list = transformers.StoppingCriteriaList()
         # 定义模型stopping_criteria 队列，在每次响应时将 torch.LongTensor, torch.FloatTensor同步到AnswerResult
