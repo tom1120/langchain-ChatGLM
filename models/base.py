@@ -29,7 +29,7 @@ class AnswerResult:
     """
     history: List[List[str]] = []
     llm_output: Optional[dict] = None
-    listenerToken: Optional[dict] = None
+    listenerToken: ListenerToken = None
 
 
 class AnswerResultStream:
