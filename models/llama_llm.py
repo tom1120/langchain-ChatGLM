@@ -50,11 +50,10 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
     temperature: float = 0.7
     top_p: float = 0.1
     top_k: int = 10
-    repetition_penalty: float = 1.18
+    repetition_penalty: float = 6.1
     encoder_repetition_penalty: int = 1
     min_length: int = 0
     logits_processor: LogitsProcessorList = None
-    do_sample: bool = True
     stopping_criteria: Optional[StoppingCriteriaList] = None
 
     state: object = {'max_new_tokens': 50,
@@ -65,7 +64,6 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
                      'encoder_repetition_penalty': 1,
                      'no_repeat_ngram_size': 0,
                      'min_length': 0,
-                     'do_sample': True,
                      'penalty_alpha': 0,
                      'num_beams': 1,
                      'length_penalty': 1,
@@ -215,7 +213,6 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
         gen_kwargs = {
                       "max_new_tokens": self.max_new_tokens,
                       "num_beams": self.num_beams,
-                      "do_sample": self.do_sample,
                       "top_p": self.top_p,
                       "top_k": self.top_k,
                       "repetition_penalty": self.repetition_penalty,
