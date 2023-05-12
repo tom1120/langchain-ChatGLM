@@ -69,7 +69,8 @@ class ChatGLM(BaseAnswer, LLM, ABC):
                 answer_result = AnswerResult()
                 answer_result.history = history
                 answer_result.llm_output = {"answer": stream_resp}
-                answer_result.listenerToken = listenerQueue.listenerQueue.pop()
+                if listenerQueue.listenerQueue.__len__() > 0:
+                    answer_result.listenerToken = listenerQueue.listenerQueue.pop()
                 generate_with_callback(answer_result)
         else:
             response, _ = self.checkPoint.model.chat(
@@ -85,7 +86,8 @@ class ChatGLM(BaseAnswer, LLM, ABC):
             answer_result = AnswerResult()
             answer_result.history = history
             answer_result.llm_output = {"answer": response}
-            answer_result.listenerToken = listenerQueue.listenerQueue.pop()
+            if listenerQueue.listenerQueue.__len__() > 0:
+                answer_result.listenerToken = listenerQueue.listenerQueue.pop()
 
             generate_with_callback(answer_result)
 

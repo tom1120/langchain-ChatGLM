@@ -1,9 +1,11 @@
 from abc import ABC
 
 from langchain.llms.base import LLM
-
+import random
 import torch
 import transformers
+from transformers.generation.logits_process import LogitsProcessor
+from transformers.generation.utils import LogitsProcessorList, StoppingCriteriaList
 from typing import Optional, List, Dict, Any
 from models.loader import LoaderCheckPoint
 from models.extensions.callback import (Iteratorize, Stream, FixedLengthQueue)
@@ -31,27 +33,31 @@ def _update_response(response: Dict[str, Any], stream_response: str) -> None:
     response["text"] += stream_response
 
 
+class InvalidScoreLogitsProcessor(LogitsProcessor):
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+        if torch.isnan(scores).any() or torch.isinf(scores).any():
+            scores.zero_()
+            scores[..., 5] = 5e4
+        return scores
+
+
 class LLamaLLM(BaseAnswer, LLM, ABC):
     checkPoint: LoaderCheckPoint = None
     history = []
     history_len: int = 10
+    max_length: int = 256
+    num_beams: int = 1
+    temperature: float = 0.1
+    top_p: float = 0.1
+    top_k: int = 10
+    repetition_penalty: float = 1.18
+    encoder_repetition_penalty: int = 1
+    min_length: int = 0
+    eos_token_id: Optional[int] = [2]
+    logits_processor: LogitsProcessorList = None
+    do_sample: bool = True
+    stopping_criteria: Optional[StoppingCriteriaList] = None
 
-    generate_params: object = {'max_new_tokens': 50,
-                               'do_sample': True,
-                               'temperature': 0.7,
-                               'top_p': 0.1,
-                               'typical_p': 1,
-                               'repetition_penalty': 1.18,
-                               'encoder_repetition_penalty': 1,
-                               'top_k': 40, 'min_length': 0,
-                               'no_repeat_ngram_size': 0,
-                               'num_beams': 1,
-                               'penalty_alpha': 0,
-                               'length_penalty': 1,
-                               'early_stopping': False,
-                               'eos_token_id': [2],
-                               'stopping_criteria': []
-                               }
     state: object = {'max_new_tokens': 50,
                      'seed': 1,
                      'temperature': 0, 'top_p': 0.1,
@@ -84,7 +90,7 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
 
     def encode(self, prompt, add_special_tokens=True, add_bos_token=True, truncation_length=None):
         input_ids = self.checkPoint.tokenizer.encode(str(prompt), return_tensors='pt',
-                                              add_special_tokens=add_special_tokens)
+                                                     add_special_tokens=add_special_tokens)
         # This is a hack for making replies more creative.
         if not add_bos_token and input_ids[0][0] == self.checkPoint.tokenizer.bos_token_id:
             input_ids = input_ids[:, 1:]
@@ -106,7 +112,7 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
         return reply
 
     def get_max_prompt_length(self):
-        max_length = self.state['truncation_length'] - self.state['max_new_tokens']
+        max_length = self.state['truncation_length'] - self.max_length
         return max_length
 
     def generate_with_callback(self, callback=None, **kwargs):
@@ -127,6 +133,65 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
             formatted_history += f"### {role}: {content}\n"
         return formatted_history
 
+    def prepare_inputs_for_generation(self,
+                                      input_ids: torch.LongTensor):
+        """
+        预生成注意力掩码和 输入序列中每个位置的索引的张量
+        # TODO 没有思路
+        :return:
+        """
+
+        mask_positions = torch.zeros((1, input_ids.shape[1]), dtype=input_ids.dtype).to(self.checkPoint.model.device)
+
+        attention_mask = self.get_masks(input_ids, input_ids.device)
+
+        position_ids = self.get_position_ids(
+            input_ids,
+            device=input_ids.device,
+            mask_positions=mask_positions
+        )
+
+        return input_ids, position_ids, attention_mask
+
+    def get_position_ids(self, input_ids: torch.LongTensor, mask_positions, device):
+        """
+        注意力偏移量
+        :param input_ids:
+        :param mask_positions:
+        :param device:
+        :param use_gmasks:
+        :return:
+        """
+        batch_size, seq_length = input_ids.shape
+        context_lengths = [seq.tolist().index(self.checkPoint.model_config.bos_token_id) for seq in input_ids]
+        position_ids = torch.arange(seq_length, dtype=torch.long, device=device).unsqueeze(0).repeat(batch_size, 1)
+        for i, context_length in enumerate(context_lengths):
+            position_ids[i, context_length:] = mask_positions[i]
+        block_position_ids = [torch.cat((
+            torch.zeros(context_length, dtype=torch.long, device=device),
+            torch.arange(seq_length - context_length, dtype=torch.long, device=device) + 1
+        )) for context_length in context_lengths]
+        block_position_ids = torch.stack(block_position_ids, dim=0)
+        position_ids = torch.stack((position_ids, block_position_ids), dim=1)
+        return position_ids
+
+    def get_masks(self, input_ids, device):
+        """
+        获取注意力掩码
+        :param input_ids:
+        :param device:
+        :return:
+        """
+        batch_size, seq_length = input_ids.shape
+        context_lengths = [seq.tolist().index(self.checkPoint.model_config.bos_token_id) for seq in input_ids]
+        attention_mask = torch.ones((batch_size, seq_length, seq_length), device=device)
+        attention_mask.tril_()
+        for i, context_length in enumerate(context_lengths):
+            attention_mask[i, :, :context_length] = 1
+        attention_mask.unsqueeze_(1)
+        attention_mask = (attention_mask < 0.5).bool()
+        return attention_mask
+
     def generate_softprompt_history_tensors(self, input_ids):
         """
         历史对话软提示
@@ -143,10 +208,9 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
                                         truncation_length=self.get_max_prompt_length())
 
         # 将历史对话向量与当前对话向量拼接
-        inputs_embeds = torch.cat((history_input_ids, input_ids), dim=1)
+        filler_input_ids = torch.cat((history_input_ids, input_ids), dim=1)
 
-        filler_input_ids = torch.zeros((1, inputs_embeds.shape[1]), dtype=input_ids.dtype).to(self.checkPoint.model.device)
-        return inputs_embeds, filler_input_ids
+        return filler_input_ids
 
     def _call(self,
               prompt: str,
@@ -154,17 +218,36 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
               run_manager: Optional[CallbackManagerForLLMRun] = None) -> str:
         input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
                                 truncation_length=self.get_max_prompt_length())
+        if self.logits_processor is None:
+            self.logits_processor = LogitsProcessorList()
+        self.logits_processor.append(InvalidScoreLogitsProcessor())
 
-        # self.history[-self.history_len:] if self.history_len > 0 else []
-        output = input_ids[0]
-        inputs_embeds, filler_input_ids = self.generate_softprompt_history_tensors(input_ids)
-        # self.generate_params.update({'inputs_embeds': inputs_embeds})
-        self.generate_params.update({'inputs': inputs_embeds})
+        gen_kwargs = {"max_length": self.max_length,
+                      "num_beams": self.num_beams,
+                      "do_sample": self.do_sample,
+                      "top_p": self.top_p,
+                      "top_k": self.top_k,
+                      "repetition_penalty": self.repetition_penalty,
+                      "encoder_repetition_penalty": self.encoder_repetition_penalty,
+                      "min_length": self.min_length,
+                      "eos_token_id": self.min_length,
+                      "temperature": self.temperature,
+                      "logits_processor": self.logits_processor}
 
+        filler_input_ids = self.generate_softprompt_history_tensors(input_ids)
+        input_ids, position_ids, attention_mask = self.prepare_inputs_for_generation(input_ids=filler_input_ids)
+
+        # 对话模型prompt
+        gen_kwargs.update({'inputs': filler_input_ids})
+        # 注意力掩码
+        # gen_kwargs.update({'attention_mask': attention_mask})
+        # gen_kwargs.update({'position_ids': position_ids})
+        # 观测输出
+        gen_kwargs.update({'stopping_criteria':  self.stopping_criteria})
         shared.stop_everything = False
         stopped = False
         response_template = _streaming_response_template()
-        with self.generate_with_streaming(**self.generate_params) as generator:
+        with self.generate_with_streaming(**gen_kwargs) as generator:
             last_reply_index = 0
             # Create a FixedLengthQueue with the desired stop sequence and a maximum length.
             if stop:
@@ -177,7 +260,7 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
                 new_reply = len(reply) - last_reply_index
                 output_reply = reply[-new_reply:]
 
-                if last_reply_index > 0 or new_tokens == self.generate_params['max_new_tokens'] - 1 or stopped:
+                if last_reply_index > 0 or new_tokens == gen_kwargs['max_length'] - 1 or stopped:
                     if stop:
                         queue.add(output_reply)
                         pos = queue.contains_stop_sequence()
@@ -202,15 +285,15 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
         if history:
             self.history = history
         # Create the StoppingCriteriaList with the stopping strings
-        stopping_criteria_list = transformers.StoppingCriteriaList()
+        self.stopping_criteria = transformers.StoppingCriteriaList()
         # 定义模型stopping_criteria 队列，在每次响应时将 torch.LongTensor, torch.FloatTensor同步到AnswerResult
         listenerQueue = AnswerResultQueueSentinelTokenListenerQueue()
-        stopping_criteria_list.append(listenerQueue)
-        self.generate_params['stopping_criteria'] = stopping_criteria_list
+        self.stopping_criteria.append(listenerQueue)
         # TODO 需要实现chat对话模块和注意力模型，目前_call为langchain的LLM拓展的api，默认为无提示词模式，如果需要操作注意力模型，可以参考chat_glm的实现
         response = self._call(prompt=prompt, stop=['\n###'])
         answer_result = AnswerResult()
         answer_result.history = self.history
-        answer_result.listenerToken = listenerQueue.listenerQueue.pop()
+        if listenerQueue.listenerQueue.__len__() > 0:
+            answer_result.listenerToken = listenerQueue.listenerQueue.pop()
         answer_result.llm_output = {"answer": response}
         generate_with_callback(answer_result)
