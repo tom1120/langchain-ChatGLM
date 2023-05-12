@@ -44,16 +44,15 @@ class InvalidScoreLogitsProcessor(LogitsProcessor):
 class LLamaLLM(BaseAnswer, LLM, ABC):
     checkPoint: LoaderCheckPoint = None
     history = []
-    history_len: int = 10
-    max_length: int = 256
+    history_len: int = 3
+    max_new_tokens: int = 256
     num_beams: int = 1
-    temperature: float = 0.1
+    temperature: float = 0.7
     top_p: float = 0.1
     top_k: int = 10
     repetition_penalty: float = 1.18
     encoder_repetition_penalty: int = 1
     min_length: int = 0
-    eos_token_id: Optional[int] = [2]
     logits_processor: LogitsProcessorList = None
     do_sample: bool = True
     stopping_criteria: Optional[StoppingCriteriaList] = None
@@ -108,29 +107,24 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
 
     def decode(self, output_ids):
         reply = self.checkPoint.tokenizer.decode(output_ids, skip_special_tokens=True)
-        reply = reply.replace(r'<|endoftext|>', '')
         return reply
 
-    def get_max_prompt_length(self):
-        max_length = self.state['truncation_length'] - self.max_length
-        return max_length
-
-    def generate_with_callback(self, callback=None, **kwargs):
-        kwargs['stopping_criteria'].append(Stream(callback_func=callback))
+    def generate_with_callback(self,callback=None, **kwargs):
         self.checkPoint.clear_torch_cache()
+        kwargs['stopping_criteria'].append(Stream(callback_func=callback))
         with torch.no_grad():
             self.checkPoint.model.generate(**kwargs)
 
-    def generate_with_streaming(self, callback=None, **kwargs):
-        return Iteratorize(self.generate_with_callback, kwargs, callback)
+    def generate_with_streaming(self, **kwargs):
+        return Iteratorize(self.generate_with_callback, kwargs)
 
     # 将历史对话数组转换为文本格式
-    def history_to_text(self):
+    def history_to_text(self, query):
         formatted_history = ''
         history = self.history[-self.history_len:] if self.history_len > 0 else []
-        for entry in history:
-            role, content = entry
-            formatted_history += f"### {role}: {content}\n"
+        for i, (old_query, response) in enumerate(history):
+            formatted_history += "[Round {}]\n问：{}\n答：{}\n".format(i, old_query, response)
+        formatted_history += "[Round {}]\n问：{}\n答：".format(len(history), query)
         return formatted_history
 
     def prepare_inputs_for_generation(self,
@@ -192,7 +186,7 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
         attention_mask = (attention_mask < 0.5).bool()
         return attention_mask
 
-    def generate_softprompt_history_tensors(self, input_ids):
+    def generate_softprompt_history_tensors(self, query):
         """
         历史对话软提示
             这段代码首先定义了一个名为 history_to_text 的函数，用于将 self.history
@@ -203,26 +197,23 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
 
         # 对话内容
         # 处理历史对话
-        formatted_history = self.history_to_text()
-        history_input_ids = self.encode(formatted_history, add_bos_token=self.state['add_bos_token'],
-                                        truncation_length=self.get_max_prompt_length())
-
+        formatted_history = self.history_to_text(query)
         # 将历史对话向量与当前对话向量拼接
-        filler_input_ids = torch.cat((history_input_ids, input_ids), dim=1)
-
+        filler_input_ids = self.encode(formatted_history, add_bos_token=self.state['add_bos_token'],
+                                       truncation_length=self.max_new_tokens)
         return filler_input_ids
 
     def _call(self,
               prompt: str,
               stop: Optional[List[str]] = None,
               run_manager: Optional[CallbackManagerForLLMRun] = None) -> str:
-        input_ids = self.encode(prompt, add_bos_token=self.state['add_bos_token'],
-                                truncation_length=self.get_max_prompt_length())
+
         if self.logits_processor is None:
             self.logits_processor = LogitsProcessorList()
         self.logits_processor.append(InvalidScoreLogitsProcessor())
 
-        gen_kwargs = {"max_length": self.max_length,
+        gen_kwargs = {
+                      "max_new_tokens": self.max_new_tokens,
                       "num_beams": self.num_beams,
                       "do_sample": self.do_sample,
                       "top_p": self.top_p,
@@ -230,15 +221,14 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
                       "repetition_penalty": self.repetition_penalty,
                       "encoder_repetition_penalty": self.encoder_repetition_penalty,
                       "min_length": self.min_length,
-                      "eos_token_id": self.min_length,
                       "temperature": self.temperature,
                       "logits_processor": self.logits_processor}
 
-        filler_input_ids = self.generate_softprompt_history_tensors(input_ids)
-        input_ids, position_ids, attention_mask = self.prepare_inputs_for_generation(input_ids=filler_input_ids)
+        input_ids = self.generate_softprompt_history_tensors(prompt)
+        # input_ids, position_ids, attention_mask = self.prepare_inputs_for_generation(input_ids=filler_input_ids)
 
         # 对话模型prompt
-        gen_kwargs.update({'inputs': filler_input_ids})
+        gen_kwargs.update({'inputs': input_ids})
         # 注意力掩码
         # gen_kwargs.update({'attention_mask': attention_mask})
         # gen_kwargs.update({'position_ids': position_ids})
@@ -260,14 +250,15 @@ class LLamaLLM(BaseAnswer, LLM, ABC):
                 new_reply = len(reply) - last_reply_index
                 output_reply = reply[-new_reply:]
 
-                if last_reply_index > 0 or new_tokens == gen_kwargs['max_length'] - 1 or stopped:
+                if last_reply_index > 0:
                     if stop:
                         queue.add(output_reply)
                         pos = queue.contains_stop_sequence()
                         if pos != -1:
                             shared.stop_everything = True
                             stopped = True
-
+                if new_tokens == self.max_new_tokens - 1 or stopped:
+                    break
                 _update_response(response_template, output_reply)
                 last_reply_index = len(reply)
                 if stopped:

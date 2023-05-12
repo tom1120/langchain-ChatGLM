@@ -77,7 +77,7 @@ class Stream(transformers.StoppingCriteria):
     def __init__(self, callback_func=None):
         self.callback_func = callback_func
 
-    def __call__(self, input_ids, scores) -> bool:
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
         if self.callback_func is not None:
             self.callback_func(input_ids[0])
         return False
@@ -95,13 +95,14 @@ class Iteratorize:
         self.q = Queue()
         self.sentinel = object()
         self.kwargs = kwargs
+        self.stop_now = False
 
         def _callback(val):
-            if shared.stop_everything:
+            if self.stop_now:
                 raise ValueError
             self.q.put(val)
 
-        def gentask():
+        def gen():
             try:
                 ret = self.mfunc(callback=_callback, **self.kwargs)
             except ValueError:
@@ -110,12 +111,9 @@ class Iteratorize:
                 traceback.print_exc()
                 pass
 
-            shared.loaderCheckPoint.clear_torch_cache()
             self.q.put(self.sentinel)
-            if self.c_callback:
-                self.c_callback(ret)
 
-        self.thread = ThreadWithException(target=gentask)
+        self.thread = Thread(target=gen)
         self.thread.start()
 
     def __iter__(self):
@@ -135,7 +133,5 @@ class Iteratorize:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-
-        self.thread.raise_exception()
-
+        self.stop_now = True
         shared.loaderCheckPoint.clear_torch_cache()
