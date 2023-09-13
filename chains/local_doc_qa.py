@@ -160,6 +160,7 @@ class LocalDocQA:
         self.llm.history_len = llm_history_len
 
         self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_dict[embedding_model],
+                                                cache_folder=EMBEDDING_MODEL_CACHE,
                                                 model_kwargs={'device': embedding_device})
         self.top_k = top_k
 

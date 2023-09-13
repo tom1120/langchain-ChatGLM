@@ -49,7 +49,7 @@ def auto_configure_device_map(num_gpus: int, use_lora: bool) -> Dict[str, int]:
 
 
 class ChatGLM(LLM):
-    max_token: int = 2048
+    max_token: int = 1024
     temperature: float = 0.1
     top_p = 0.7
     # history = []
@@ -118,11 +118,11 @@ class ChatGLM(LLM):
                    use_lora=False,
                    device_map: Optional[Dict[str, int]] = None,
                    **kwargs):
+
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name_or_path,
             trust_remote_code=True
         )
-
         model_config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
 
         if use_ptuning_v2:

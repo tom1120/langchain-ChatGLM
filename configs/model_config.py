@@ -19,6 +19,9 @@ EMBEDDING_MODEL = "text2vec"
 # Embedding running device
 EMBEDDING_DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
+# Embedding model cache
+EMBEDDING_MODEL_CACHE = "F:/huggingface"
+
 # supported LLM models
 llm_model_dict = {
     "chatyuan": "ClueAI/ChatYuan-large-v2",
@@ -30,7 +33,8 @@ llm_model_dict = {
 }
 
 # LLM model name
-LLM_MODEL = "chatglm-6b"
+# LLM_MODEL = "chatglm-6b"
+LLM_MODEL = "chatglm-6b-int4-qe"
 
 # LLM lora path，默认为空，如果有请直接指定文件夹路径
 LLM_LORA_PATH = ""
@@ -70,7 +74,7 @@ LLM_HISTORY_LEN = 0
 
 # return top-k text chunk from vector store
 # VECTOR_SEARCH_TOP_K = 5
-VECTOR_SEARCH_TOP_K = 5
+VECTOR_SEARCH_TOP_K = 1
 
 # 知识检索内容相关度 Score, 数值范围约为0-1100，如果为0，则不生效，经测试设置为小于500时，匹配结果更精准
 VECTOR_SEARCH_SCORE_THRESHOLD = 0

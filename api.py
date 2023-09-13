@@ -1,4 +1,12 @@
 import argparse
+import os
+
+os.environ['http_proxy'] = 'http://127.0.0.1:7890'
+os.environ['https_proxy'] = 'http://127.0.0.1:7890'
+
+# windows默认地址 C:\Users\Administrator\.cache
+# os.environ["cache_dir"] = "F:/huggingface/hub"
+os.environ["HF_HOME"] = "F:/huggingface"
 
 import uvicorn
 from fastapi import Body, FastAPI, File, Form, Query, UploadFile, WebSocket
