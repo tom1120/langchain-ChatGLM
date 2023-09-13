@@ -7,7 +7,7 @@ import nltk
 
 nltk.data.path = [NLTK_DATA_PATH] + nltk.data.path
 
-
+os.environ['no_proxy'] = '127.0.0.1,localhost'
 def get_vs_list():
     lst_default = ["新建知识库"]
     if not os.path.exists(VS_ROOT_PATH):
@@ -73,7 +73,7 @@ def get_answer(query, vs_path, history, mode, score_threshold=VECTOR_SEARCH_SCOR
             history[-1][-1] = resp + (
                 "\n\n当前知识库为空，如需基于知识库进行问答，请先加载知识库后，再进行提问。" if mode == "知识库问答" else "")
             yield history, ""
-    logger.info(f"flagging: username={FLAG_USER_NAME},query={query},vs_path={vs_path},mode={mode},history={history}")
+    log.logger.info(f"flagging: username={FLAG_USER_NAME},query={query},vs_path={vs_path},mode={mode},history={history}")
     flag_csv_logger.flag([query, vs_path, history, mode], username=FLAG_USER_NAME)
 
 
@@ -82,16 +82,16 @@ def init_model():
         local_doc_qa.init_cfg()
         local_doc_qa.llm._call("你好")
         reply = """模型已成功加载，可以开始对话，或从右侧选择模式后开始对话"""
-        logger.info(reply)
+        log.logger.info(reply)
         return reply
     except Exception as e:
-        logger.error(e)
+        log.logger.error(e)
         reply = """模型未成功加载，请到页面左上角"模型配置"选项卡中重新选择后点击"加载模型"按钮"""
         if str(e) == "Unknown platform: darwin":
-            logger.info("该报错可能因为您使用的是 macOS 操作系统，需先下载模型至本地后执行 Web UI，具体方法请参考项目 README 中本地部署方法及常见问题："
+            log.logger.info("该报错可能因为您使用的是 macOS 操作系统，需先下载模型至本地后执行 Web UI，具体方法请参考项目 README 中本地部署方法及常见问题："
                         " https://github.com/imClumsyPanda/langchain-ChatGLM")
         else:
-            logger.info(reply)
+            log.logger.info(reply)
         return reply
 
 
@@ -104,11 +104,11 @@ def reinit_model(llm_model, embedding_model, llm_history_len, use_ptuning_v2, us
                               use_lora=use_lora,
                               top_k=top_k, )
         model_status = """模型已成功重新加载，可以开始对话，或从右侧选择模式后开始对话"""
-        logger.info(model_status)
+        log.logger.info(model_status)
     except Exception as e:
-        logger.error(e)
+        log.logger.error(e)
         model_status = """模型未成功重新加载，请到页面左上角"模型配置"选项卡中重新选择后点击"加载模型"按钮"""
-        logger.info(model_status)
+        log.logger.info(model_status)
     return history + [[None, model_status]]
 
 
@@ -134,7 +134,7 @@ def get_vector_store(vs_id, files, sentence_size, history, one_conent, one_conte
     else:
         file_status = "模型未完成加载，请先在加载模型后再导入文件"
         vs_path = None
-    logger.info(file_status)
+    log.logger.info(file_status)
     return vs_path, None, history + [[None, file_status]]
 
 
@@ -419,7 +419,7 @@ with gr.Blocks(css=block_css) as demo:
 (demo
  .queue(concurrency_count=3)
  .launch(server_name='0.0.0.0',
-         server_port=7860,
+         server_port=7870,
          show_api=False,
          share=False,
          inbrowser=False))

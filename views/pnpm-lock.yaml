@@ -25,6 +25,9 @@ dependencies:
   pinia:
     specifier: ^2.0.33
     version: registry.npmmirror.com/pinia@2.0.33(typescript@4.9.5)(vue@3.2.47)
+  pnpm:
+    specifier: ^8.5.1
+    version: registry.npmmirror.com/pnpm@8.5.1
   qs:
     specifier: ^6.11.1
     version: registry.npmmirror.com/qs@6.11.1
@@ -6927,6 +6930,14 @@ packages:
     version: 8.0.0
     engines: {node: '>=4'}
     dev: true
+
+  registry.npmmirror.com/pnpm@8.5.1:
+    resolution: {integrity: sha512-W6elL7Nww0a/MCICkzpkbxW6f99TQuX4DuJoDjWp39X08PKDkEpg4cgj3d6EtgYADcdQWl/eM8NdlLJVE3RgpA==, registry: https://registry.npm.taobao.org/, tarball: https://registry.npmmirror.com/pnpm/-/pnpm-8.5.1.tgz}
+    name: pnpm
+    version: 8.5.1
+    engines: {node: '>=16.14'}
+    hasBin: true
+    dev: false
 
   registry.npmmirror.com/postcss-import@14.1.0(postcss@8.4.21):
     resolution: {integrity: sha512-flwI+Vgm4SElObFVPpTIT7SU7R3qk2L7PyduMcokiaVKuWv9d/U+Gm/QAd8NDLuykTWTkcrjOeD2Pp1rMeBTGw==, registry: https://registry.npm.taobao.org/, tarball: https://registry.npmmirror.com/postcss-import/-/postcss-import-14.1.0.tgz}

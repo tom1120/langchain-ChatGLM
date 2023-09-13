@@ -177,11 +177,11 @@ class LocalDocQA:
                 file = os.path.split(filepath)[-1]
                 try:
                     docs = load_file(filepath, sentence_size)
-                    logger.info(f"{file} 已成功加载")
+                    log.logger.info(f"{file} 已成功加载")
                     loaded_files.append(filepath)
                 except Exception as e:
-                    logger.error(e)
-                    logger.info(f"{file} 未能成功加载")
+                    log.logger.error(e)
+                    log.logger.info(f"{file} 未能成功加载")
                     return None
             elif os.path.isdir(filepath):
                 docs = []
@@ -191,26 +191,26 @@ class LocalDocQA:
                         docs += load_file(fullfilepath, sentence_size)
                         loaded_files.append(fullfilepath)
                     except Exception as e:
-                        logger.error(e)
+                        log.logger.error(e)
                         failed_files.append(file)
 
                 if len(failed_files) > 0:
-                    logger.info("以下文件未能成功加载：")
+                    log.logger.info("以下文件未能成功加载：")
                     for file in failed_files:
-                        logger.info(f"{file}\n")
+                        log.logger.info(f"{file}\n")
 
         else:
             docs = []
             for file in filepath:
                 try:
                     docs += load_file(file)
-                    logger.info(f"{file} 已成功加载")
+                    log.logger.info(f"{file} 已成功加载")
                     loaded_files.append(file)
                 except Exception as e:
-                    logger.error(e)
-                    logger.info(f"{file} 未能成功加载")
+                    log.logger.error(e)
+                    log.logger.info(f"{file} 未能成功加载")
         if len(docs) > 0:
-            logger.info("文件加载完毕，正在生成向量库")
+            log.logger.info("文件加载完毕，正在生成向量库")
             if vs_path and os.path.isdir(vs_path):
                 vector_store = FAISS.load_local(vs_path, self.embeddings)
                 vector_store.add_documents(docs)
@@ -222,16 +222,17 @@ class LocalDocQA:
                 vector_store = FAISS.from_documents(docs, self.embeddings)  # docs 为Document列表
                 torch_gc()
 
+            # 这个保存似乎是追加，不会重新生成
             vector_store.save_local(vs_path)
             return vs_path, loaded_files
         else:
-            logger.info("文件均未成功加载，请检查依赖包或替换为其他文件再次上传。")
+            log.logger.info("文件均未成功加载，请检查依赖包或替换为其他文件再次上传。")
             return None, loaded_files
 
     def one_knowledge_add(self, vs_path, one_title, one_conent, one_content_segmentation, sentence_size):
         try:
             if not vs_path or not one_title or not one_conent:
-                logger.info("知识库添加错误，请确认知识库名字、标题、内容是否正确！")
+                log.logger.info("知识库添加错误，请确认知识库名字、标题、内容是否正确！")
                 return None, [one_title]
             docs = [Document(page_content=one_conent + "\n", metadata={"source": one_title})]
             if not one_content_segmentation:
@@ -246,7 +247,7 @@ class LocalDocQA:
             vector_store.save_local(vs_path)
             return vs_path, [one_title]
         except Exception as e:
-            logger.error(e)
+            log.logger.error(e)
             return None, [one_title]
 
     def get_knowledge_based_answer(self, query, vs_path, chat_history=[], streaming: bool = STREAMING):
@@ -306,11 +307,11 @@ if __name__ == "__main__":
                                                                  vs_path=vs_path,
                                                                  chat_history=[],
                                                                  streaming=True):
-        logger.info(resp["result"][last_print_len:], end="", flush=True)
+        log.logger.info(resp["result"][last_print_len:], end="", flush=True)
         last_print_len = len(resp["result"])
     source_text = [f"""出处 [{inum + 1}] {os.path.split(doc.metadata['source'])[-1]}：\n\n{doc.page_content}\n\n"""
                    # f"""相关度：{doc.metadata['score']}\n\n"""
                    for inum, doc in
                    enumerate(resp["source_documents"])]
-    logger.info("\n\n" + "\n\n".join(source_text))
+    log.logger.info("\n\n" + "\n\n".join(source_text))
     pass

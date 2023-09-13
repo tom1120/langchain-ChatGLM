@@ -49,13 +49,13 @@ def auto_configure_device_map(num_gpus: int, use_lora: bool) -> Dict[str, int]:
 
 
 class ChatGLM(LLM):
-    max_token: int = 10000
-    temperature: float = 0.8
-    top_p = 0.9
+    max_token: int = 2048
+    temperature: float = 0.1
+    top_p = 0.7
     # history = []
     tokenizer: object = None
     model: object = None
-    history_len: int = 10
+    history_len: int = 1
 
     def __init__(self):
         super().__init__()
@@ -133,7 +133,7 @@ class ChatGLM(LLM):
                 model_config.pre_seq_len = prefix_encoder_config['pre_seq_len']
                 model_config.prefix_projection = prefix_encoder_config['prefix_projection']
             except Exception as e:
-                logger.error(f"加载PrefixEncoder config.json失败: {e}")
+                log.logger.error(f"加载PrefixEncoder config.json失败: {e}")
         self.model = AutoModel.from_pretrained(model_name_or_path, config=model_config, trust_remote_code=True,
                                                **kwargs)
         if LLM_LORA_PATH and use_lora:
@@ -171,19 +171,25 @@ class ChatGLM(LLM):
                 self.model.transformer.prefix_encoder.load_state_dict(new_prefix_state_dict)
                 self.model.transformer.prefix_encoder.float()
             except Exception as e:
-                logger.error(f"加载PrefixEncoder模型参数失败:{e}")
+                log.logger.error(f"加载PrefixEncoder模型参数失败:{e}")
 
         self.model = self.model.eval()
+
+    def tokenize(self, texts: List[str]):
+        log.logger.info('tokenize')
+        return [self.tokenizer.tokenize(text) for text in texts]
 
 
 if __name__ == "__main__":
     llm = ChatGLM()
+    log.logger.error('xxxxxxxxxxxxxxxxxxxxxxxxx')
+    # model_params = {'do_sample': True, 'num_beams': 4}
     llm.load_model(model_name_or_path=llm_model_dict[LLM_MODEL],
-                   llm_device=LLM_DEVICE, )
+                   llm_device=LLM_DEVICE)
     last_print_len = 0
     for resp, history in llm._call("你好", streaming=True):
-        logger.info(resp[last_print_len:], end="", flush=True)
+        log.logger.info(resp[last_print_len:], end="", flush=True)
         last_print_len = len(resp)
     for resp, history in llm._call("你好", streaming=False):
-        logger.info(resp)
+        log.logger.info(resp)
     pass

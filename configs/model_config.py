@@ -1,13 +1,10 @@
 import torch.cuda
 import torch.backends
 import os
-import logging
+
 import uuid
 
-LOG_FORMAT = "%(levelname) -5s %(asctime)s" "-1d: %(message)s"
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-logging.basicConfig(format=LOG_FORMAT)
+from app.tool.logging_tool import Logger, log
 
 embedding_model_dict = {
     "ernie-tiny": "nghuyong/ernie-3.0-nano-zh",
@@ -65,12 +62,14 @@ PROMPT_TEMPLATE = """已知信息：
 SENTENCE_SIZE = 100
 
 # 匹配后单段上下文长度
-CHUNK_SIZE = 250
+# CHUNK_SIZE = 250
+CHUNK_SIZE = 150
 
 # LLM input history length
-LLM_HISTORY_LEN = 3
+LLM_HISTORY_LEN = 0
 
 # return top-k text chunk from vector store
+# VECTOR_SEARCH_TOP_K = 5
 VECTOR_SEARCH_TOP_K = 5
 
 # 知识检索内容相关度 Score, 数值范围约为0-1100，如果为0，则不生效，经测试设置为小于500时，匹配结果更精准
@@ -80,7 +79,7 @@ NLTK_DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "nltk_
 
 FLAG_USER_NAME = uuid.uuid4().hex
 
-logger.info(f"""
+log.logger.info(f"""
 loading model config
 llm device: {LLM_DEVICE}
 embedding device: {EMBEDDING_DEVICE}
@@ -90,4 +89,4 @@ flagging username: {FLAG_USER_NAME}
 
 # 是否开启跨域，默认为False，如果需要开启，请设置为True
 # is open cross domain
-OPEN_CROSS_DOMAIN = False
+OPEN_CROSS_DOMAIN = True
